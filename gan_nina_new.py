@@ -22,6 +22,8 @@ FLAG.DEFINE_boolean('is_test', False, 'Test or not.')
 FLAG.DEFINE_boolean('iwgan', False, 'Using improved wgan or not.')
 FLAG.DEFINE_boolean('old_param', False, 'Saving new variables or not.')
 FLAG.DEFINE_boolean('update_new', False, 'If True, only update new variables.')
+FLAG.DEFINE_boolean(
+    'diff_lr', False, 'If True, using different learning rate.')
 FLAG.DEFINE_integer('batch_size', 1024, 'Batch size.')
 FLAG.DEFINE_integer('ckpt', 1, 'Save checkpoint every ? epochs.')
 FLAG.DEFINE_integer('sample', 1, 'Get sample every ? epochs.')
@@ -52,17 +54,22 @@ def train(sess):
     fake_data = generator(input_noise_holder)
     real_score = discriminator(real_data_holder)
     fake_score = discriminator(fake_data, reuse=True)
+    sampler = generator(input_noise_holder, is_train=False)
+    tf.summary.histogram('samples', sampler)
+
     all_vars = tf.trainable_variables()
-    #old_vars = [var for var in all_vars if '_old' in var.name]
-    if FLAGS.update_new:
+    if FLAGS.update_new or FLAGS.diff_lr:
         new_vars = [var for var in all_vars if '_new' in var.name]
-        gene_vars = [var for var in new_vars if 'generator' in var.name]
-        disc_vars = [var for var in new_vars if 'discriminator' in var.name]
+        old_vars = [var for var in all_vars if '_old' in var.name]
+        new_gene_vars = [var for var in new_vars if 'generator' in var.name]
+        new_disc_vars = [
+            var for var in new_vars if 'discriminator' in var.name]
+        old_gene_vars = [var for var in old_vars if 'generator' in var.name]
+        old_disc_vars = [
+            var for var in old_vars if 'discriminator' in var.name]
     else:
         gene_vars = [var for var in all_vars if 'generator' in var.name]
         disc_vars = [var for var in all_vars if 'discriminator' in var.name]
-    sampler = generator(input_noise_holder, is_train=False)
-    tf.summary.histogram('samples', sampler)
 
     if not FLAGS.iwgan:
         all_score = tf.concat([real_score, fake_score], axis=0)
@@ -75,13 +82,6 @@ def train(sess):
         disc_loss = tf.reduce_mean(
             tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=labels_disc, logits=all_score))
-
-        gene_train_op = tf.train.AdamOptimizer(
-            FLAGS.learning_rate, BETA1).minimize(
-                gene_loss, var_list=gene_vars)
-        disc_train_op = tf.train.AdamOptimizer(
-            FLAGS.learning_rate, BETA1).minimize(
-                disc_loss, var_list=disc_vars)
     else:
         gene_loss = -tf.reduce_mean(fake_score)
         disc_loss = tf.reduce_mean(fake_score) - tf.reduce_mean(real_score)
@@ -99,10 +99,38 @@ def train(sess):
         gradient_penalty = tf.reduce_mean((slopes - 1.)**2)
         disc_loss += LAMB_GP * gradient_penalty
 
+    if FLAGS.update_new or FLAGS.diff_lr:
+        if FLAGS.update_new:
+            new_opt = tf.train.AdamOptimizer(FLAGS.learning_rate, BETA1)
+            old_opt = tf.train.AdamOptimizer(0, BETA1)
+        else:
+            new_opt = tf.train.AdamOptimizer(FLAGS.learning_rate, BETA1)
+            old_opt = tf.train.AdamOptimizer(FLAGS.learning_rate / 10, BETA1)
+
+        gene_grads = tf.gradients(gene_loss, new_gene_vars + old_gene_vars)
+        new_gene_grads = gene_grads[:len(new_gene_vars)]
+        old_gene_grads = gene_grads[len(new_gene_vars):]
+        gene_train_op_new = new_opt.apply_gradients(
+            zip(new_gene_grads, new_gene_vars))
+        gene_train_op_old = old_opt.apply_gradients(
+            zip(old_gene_grads, old_gene_vars))
+        gene_train_op = tf.group(gene_train_op_new, gene_train_op_old)
+
+        disc_grads = tf.gradients(disc_loss, new_disc_vars + old_disc_vars)
+        new_disc_grads = disc_grads[:len(new_disc_vars)]
+        old_disc_grads = disc_grads[len(new_disc_vars):]
+        disc_train_op_new = new_opt.apply_gradients(
+            zip(new_disc_grads, new_disc_vars))
+        disc_train_op_old = old_opt.apply_gradients(
+            zip(old_disc_grads, old_disc_vars))
+        disc_train_op = tf.group(disc_train_op_new, disc_train_op_old)
+    else:
         gene_train_op = tf.train.AdamOptimizer(
-            FLAGS.learning_rate, BETA1, BETA2).minimize(gene_loss, var_list=gene_vars)
+            FLAGS.learning_rate, BETA1).minimize(
+                gene_loss, var_list=gene_vars)
         disc_train_op = tf.train.AdamOptimizer(
-            FLAGS.learning_rate, BETA1, BETA2).minimize(disc_loss, var_list=disc_vars)
+            FLAGS.learning_rate, BETA1).minimize(
+                disc_loss, var_list=disc_vars)
 
     tf.summary.scalar('gene_loss', gene_loss)
     tf.summary.scalar('disc_loss', disc_loss)
@@ -167,8 +195,6 @@ def train(sess):
                 break
         return
 
-    # fixed_noise = np.random.uniform(-1, 1,
-    #                                [FLAGS.batch_size, NOISE_DIM]).astype(np.float32)
     for epoch in xrange(FLAGS.start_epoch, FLAGS.start_epoch + FLAGS.epoch):
         index = 0
         file_object = open(DATA_PATH, 'rb')

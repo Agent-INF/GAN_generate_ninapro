@@ -18,7 +18,6 @@ FLAGS = None
 DATASET_NAME = 'mnist'
 DATA_PATH = 'data/' + DATASET_NAME
 CHECKPOINT_DIR = 'checkpoint/' + DATASET_NAME
-LOG_DIR = 'log/' + DATASET_NAME
 SAMPLE_DIR = 'samples/' + DATASET_NAME
 
 BETA1 = 0.5
@@ -84,11 +83,6 @@ def train(sess):
             FLAGS.learning_rate, BETA1, BETA2).minimize(gene_loss, var_list=gene_vars)
         disc_train_op = tf.train.AdamOptimizer(
             FLAGS.learning_rate, BETA1, BETA2).minimize(disc_loss, var_list=disc_vars)
-
-    tf.summary.scalar('gene_loss', gene_loss)
-    tf.summary.scalar('disc_loss', disc_loss)
-    merged = tf.summary.merge_all()
-    writer = tf.summary.FileWriter(LOG_DIR, sess.graph)
 
     tf.global_variables_initializer().run()
     counter = 1
@@ -159,13 +153,12 @@ def train(sess):
                                         [FLAGS.batch_size, NOISE_DIM]).astype(np.float32)
 
         if epoch % FLAGS.sample == 0:
-            summary, samples, gene_loss_value, disc_loss_value = sess.run(
-                [merged, sampler, gene_loss, disc_loss],
+            samples, gene_loss_value, disc_loss_value = sess.run(
+                [sampler, gene_loss, disc_loss],
                 feed_dict={
                     real_data_holder: data_batch,
                     input_noise_holder: fixed_noise
                 })
-            writer.add_summary(summary, epoch)
 
             save_all_data(epoch, 0, np.reshape(samples, (-1, 28, 28, 1)))
 
@@ -382,8 +375,10 @@ def main(_):
         os.makedirs(CHECKPOINT_DIR)
     if not os.path.exists(SAMPLE_DIR):
         os.makedirs(SAMPLE_DIR)
-    if not os.path.exists(LOG_DIR):
-        os.makedirs(LOG_DIR)
+    if not os.path.exists(SAMPLE_DIR + "_test"):
+        os.makedirs(SAMPLE_DIR + "_test")
+    if not os.path.exists(SAMPLE_DIR + "_sample"):
+        os.makedirs(SAMPLE_DIR + "_sample")
 
     run_config = tf.ConfigProto(allow_soft_placement=True)
     run_config.gpu_options.allow_growth = True
@@ -404,7 +399,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--epoch',
         type=int,
-        default=20000,
+        default=100000,
         help='Number of epochs to run trainer.'
     )
     parser.add_argument(

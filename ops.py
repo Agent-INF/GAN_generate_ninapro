@@ -14,15 +14,15 @@ def concat(tensors, axis, *args, **kwargs):
 
 
 def batch_norm(x, train=True, epsilon=1e-5, momentum=0.9, name="batch_norm"):
-    with tf.variable_scope(name):
-        return tf.contrib.layers.batch_norm(
-            x,
-            decay=momentum,
-            updates_collections=None,
-            epsilon=epsilon,
-            scale=True,
-            is_training=train,
-            scope=name)
+    #with tf.variable_scope(name):
+    return tf.contrib.layers.batch_norm(
+        x,
+        decay=momentum,
+        updates_collections=None,
+        epsilon=epsilon,
+        scale=True,
+        is_training=train,
+        scope=name)
 
 
 def conv_cond_concat(x, y):
