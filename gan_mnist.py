@@ -18,6 +18,7 @@ FLAGS = None
 DATASET_NAME = 'mnist'
 DATA_PATH = 'data/' + DATASET_NAME
 CHECKPOINT_DIR = 'checkpoint/' + DATASET_NAME
+LOG_DIR = 'log/' + DATASET_NAME
 SAMPLE_DIR = 'samples/' + DATASET_NAME
 
 BETA1 = 0.5
@@ -40,8 +41,8 @@ def train(sess):
     real_score = discriminator(real_data_holder)
     fake_score = discriminator(fake_data, reuse=True)
     t_vars = tf.trainable_variables()
-    gene_vars = [var for var in t_vars if 'g_' in var.name]
-    disc_vars = [var for var in t_vars if 'd_' in var.name]
+    gene_vars = [var for var in t_vars if 'generator' in var.name]
+    disc_vars = [var for var in t_vars if 'discriminator' in var.name]
     sampler = generator(input_noise_holder, is_train=False)
 
     if not FLAGS.iwgan:
@@ -84,14 +85,19 @@ def train(sess):
         disc_train_op = tf.train.AdamOptimizer(
             FLAGS.learning_rate, BETA1, BETA2).minimize(disc_loss, var_list=disc_vars)
 
+    tf.summary.scalar('gene_loss', gene_loss)
+    tf.summary.scalar('disc_loss', disc_loss)
+    merged = tf.summary.merge_all()
+    writer = tf.summary.FileWriter(LOG_DIR, sess.graph)
+
     tf.global_variables_initializer().run()
     counter = 1
     if FLAGS.old_only:
         variables_to_restore = slim.get_variables_to_restore(
-            include=['discriminator/d_h1_conv_old', 'discriminator/d_h1_bn_old',
-                     'discriminator/d_h2_conv_old', 'discriminator/d_h2_bn_old',
-                     'generator/g_h2_conv_old', 'generator/g_h2_bn_old',
-                     'generator/g_h3_conv_old'])
+            include=['discriminator/hidden1/conv_old', 'discriminator/hidden1/bn_old',
+                     'discriminator/hidden2/conv_old', 'discriminator/hidden2/bn_old',
+                     'generator/hidden2/conv_old', 'generator/hidden2/bn_old',
+                     'generator/hidden3/conv_old'])
         saver = tf.train.Saver(variables_to_restore)
     else:
         saver = tf.train.Saver()
@@ -153,12 +159,13 @@ def train(sess):
                                         [FLAGS.batch_size, NOISE_DIM]).astype(np.float32)
 
         if epoch % FLAGS.sample == 0:
-            samples, gene_loss_value, disc_loss_value = sess.run(
-                [sampler, gene_loss, disc_loss],
+            summary, samples, gene_loss_value, disc_loss_value = sess.run(
+                [merged, sampler, gene_loss, disc_loss],
                 feed_dict={
                     real_data_holder: data_batch,
                     input_noise_holder: fixed_noise
                 })
+            writer.add_summary(summary, epoch)
 
             save_all_data(epoch, 0, np.reshape(samples, (-1, 28, 28, 1)))
 
@@ -196,21 +203,29 @@ def discriminator(data, reuse=False):
         if reuse:
             scope.reuse_variables()
 
-        hidden = conv2d(tf.reshape(data, [-1, 28, 28, 1]),
-                        16, k_h=3, k_w=3, d_h=2, d_w=2, name='d_h1_conv_old')
-        hidden = lrelu(batch_norm(hidden, name='d_h1_bn_old'))
+        layer_num = 1
+        with tf.variable_scope('hidden' + str(layer_num)):
+            hidden = conv2d(tf.reshape(data, [-1, 28, 28, 1]),
+                            16, k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
+            hidden = lrelu(batch_norm(hidden, name='bn_old'))
 
-        hidden = conv2d(hidden, 32, k_h=3, k_w=3,
-                        d_h=2, d_w=2, name='d_h2_conv_old')
-        hidden = lrelu(batch_norm(hidden, name='d_h2_bn_old'))
+        layer_num += 1
+        with tf.variable_scope('hidden' + str(layer_num)):
+            hidden = conv2d(hidden, 32, k_h=3, k_w=3,
+                            d_h=2, d_w=2, name='conv_old')
+            hidden = lrelu(batch_norm(hidden, name='bn_old'))
 
-        hidden = linear(tf.reshape(
-            hidden, [FLAGS.batch_size, -1]), 128, 'd_h3_fc_new')
-        hidden = lrelu(batch_norm(hidden, name='d_h3_bn_new'))
+        layer_num += 1
+        with tf.variable_scope('hidden' + str(layer_num)):
+            hidden = linear(tf.reshape(
+                hidden, [FLAGS.batch_size, -1]), 128, 'fc_new')
+            hidden = lrelu(batch_norm(hidden, name='bn_new'))
 
-        output = linear(hidden, 1, 'd_h4_fc_new')
+        layer_num += 1
+        with tf.variable_scope('hidden' + str(layer_num)):
+            hidden = linear(hidden, 1, 'fc_new')
 
-        return output[:, 0]
+        return hidden[:, 0]
 
 
 def generator(noise, is_train=True):
@@ -218,21 +233,27 @@ def generator(noise, is_train=True):
         if not is_train:
             scope.reuse_variables()
 
-        hidden = linear(noise, 7 * 7 * 32, 'g_h1_fc_new')
-        hidden = tf.nn.relu(batch_norm(
-            hidden, train=is_train, name='g_h1_bn_new'))
-        hidden = tf.reshape(hidden, [-1, 7, 7, 32])
+        layer_num = 1
+        with tf.variable_scope('hidden' + str(layer_num)):
+            hidden = linear(noise, 7 * 7 * 32, 'fc_new')
+            hidden = tf.nn.relu(batch_norm(
+                hidden, train=is_train, name='bn_new'))
+            hidden = tf.reshape(hidden, [-1, 7, 7, 32])
 
-        hidden = deconv2d(hidden, [FLAGS.batch_size, 14, 14, 16],
-                          k_h=3, k_w=3, d_h=2, d_w=2, name='g_h2_conv_old')
-        hidden = tf.nn.relu(batch_norm(
-            hidden, train=is_train, name='g_h2_bn_old'))
+        layer_num += 1
+        with tf.variable_scope('hidden' + str(layer_num)):
+            hidden = deconv2d(hidden, [FLAGS.batch_size, 14, 14, 16],
+                              k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
+            hidden = tf.nn.relu(batch_norm(
+                hidden, train=is_train, name='bn_old'))
 
-        hidden = deconv2d(hidden, [FLAGS.batch_size, 28, 28, 1],
-                          k_h=3, k_w=3, d_h=2, d_w=2, name='g_h3_conv_old')
-        output = tf.nn.sigmoid(hidden)
+        layer_num += 1
+        with tf.variable_scope('hidden' + str(layer_num)):
+            hidden = deconv2d(hidden, [FLAGS.batch_size, 28, 28, 1],
+                              k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
+            hidden = tf.nn.sigmoid(hidden)
 
-        return tf.reshape(output, [-1, DATA_DIM])
+        return tf.reshape(hidden, [-1, DATA_DIM])
 
 
 """
@@ -361,10 +382,8 @@ def main(_):
         os.makedirs(CHECKPOINT_DIR)
     if not os.path.exists(SAMPLE_DIR):
         os.makedirs(SAMPLE_DIR)
-    if not os.path.exists(SAMPLE_DIR + "_test"):
-        os.makedirs(SAMPLE_DIR + "_test")
-    if not os.path.exists(SAMPLE_DIR + "_sample"):
-        os.makedirs(SAMPLE_DIR + "_sample")
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
 
     run_config = tf.ConfigProto(allow_soft_placement=True)
     run_config.gpu_options.allow_growth = True
@@ -385,7 +404,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--epoch',
         type=int,
-        default=100000,
+        default=20000,
         help='Number of epochs to run trainer.'
     )
     parser.add_argument(
