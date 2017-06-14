@@ -243,7 +243,7 @@ def train(sess):
                     real_data_holder: data_batch,
                     input_noise_holder: noise_batch
                 })
-            if index % 100 == 0:
+            if index % 10 == 0:
                 print(
                     'Epoch: %3d batch: %4d time: %4.2f, G_loss: %2.8f, D_loss: %2.8f'
                     % (epoch, index, time.time() - start_time, gene_loss_value,
@@ -340,7 +340,7 @@ def read_in_chunks(file_object, chunk_size):
     while True:
         size = DATA_DIM * DATA_FRAME
         batch = np.fromfile(
-            file_object, dtype=np.float, count=size * chunk_size)
+            file_object, dtype=np.float64, count=size * chunk_size)
         if batch is None:
             break
         data = np.reshape(batch, (-1, DATA_FRAME, DATA_DIM, 1))

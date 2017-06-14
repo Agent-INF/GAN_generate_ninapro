@@ -341,7 +341,7 @@ def read_in_chunks(file_object, chunk_size):
     while True:
         size = DATA_DIM
         batch = np.fromfile(
-            file_object, dtype=np.float, count=size * chunk_size)
+            file_object, dtype=np.float64, count=size * chunk_size)
         if batch is None:
             break
         data = np.reshape(batch, (-1, DATA_DIM))
