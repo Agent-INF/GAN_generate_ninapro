@@ -59,9 +59,11 @@ def train(sess):
     sampler = generator(input_noise_holder, is_train=False)
 
     tf.summary.histogram('real_data', real_data_holder)
-    tf.summary.image('real_data', real_data_holder, max_outputs=10)
+    tf.summary.image('real_data', tf.reshape(
+        real_data_holder, [-1, 1, DATA_DIM, 1]), max_outputs=10)
     tf.summary.histogram('samples', sampler)
-    tf.summary.image('samples', sampler, max_outputs=10)
+    tf.summary.image('samples', tf.reshape(
+        sampler, [-1, 1, DATA_DIM, 1]), max_outputs=10)
 
     all_vars = tf.trainable_variables()
     if FLAGS.diff_lr:
@@ -210,6 +212,7 @@ def train(sess):
                                             [FLAGS.batch_size, NOISE_DIM]).astype(np.float32)
 
             if epoch % FLAGS.sample == 0 and index == 0:
+                print data_batch[0]
                 summary, samples, gene_loss_value, disc_loss_value = sess.run(
                     [merged, sampler, gene_loss, disc_loss],
                     feed_dict={
@@ -338,7 +341,7 @@ def read_in_chunks(file_object, chunk_size):
     while True:
         size = DATA_DIM
         batch = np.fromfile(
-            file_object, dtype=np.uint8, count=size * chunk_size)
+            file_object, dtype=np.float, count=size * chunk_size)
         if batch is None:
             break
         data = np.reshape(batch, (-1, DATA_DIM))

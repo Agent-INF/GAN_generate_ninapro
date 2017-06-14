@@ -211,6 +211,7 @@ def train(sess):
                                             [FLAGS.batch_size, NOISE_DIM]).astype(np.float32)
 
             if epoch % FLAGS.sample == 0 and index == 0:
+                print data_batch[0]
                 summary, samples, gene_loss_value, disc_loss_value = sess.run(
                     [merged, sampler, gene_loss, disc_loss],
                     feed_dict={
@@ -339,7 +340,7 @@ def read_in_chunks(file_object, chunk_size):
     while True:
         size = DATA_DIM * DATA_FRAME
         batch = np.fromfile(
-            file_object, dtype=np.uint8, count=size * chunk_size)
+            file_object, dtype=np.float, count=size * chunk_size)
         if batch is None:
             break
         data = np.reshape(batch, (-1, DATA_FRAME, DATA_DIM, 1))
