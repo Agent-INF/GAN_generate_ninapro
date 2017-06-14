@@ -33,10 +33,10 @@ FLAG.DEFINE_integer('gpu', 2, 'GPU No.')
 
 DATASET_NAME = 'nina001'
 DATA_PATH = 'data/' + DATASET_NAME + '.bin'
-CHECKPOINT_DIR = 'checkpoint/' + DATASET_NAME + '_new'
+CHECKPOINT_DIR = 'checkpoint/' + DATASET_NAME
 OLD_CHECKPOINT_DIR = 'checkpoint/mnist'
-LOG_DIR = 'log/' + DATASET_NAME + '_new'
-SAMPLE_DIR = 'samples/' + DATASET_NAME + '_new'
+LOG_DIR = 'log/' + DATASET_NAME
+SAMPLE_DIR = 'samples/' + DATASET_NAME
 
 BETA1 = 0.5
 BETA2 = 0.9
