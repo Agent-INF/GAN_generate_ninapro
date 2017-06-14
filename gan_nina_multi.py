@@ -211,7 +211,7 @@ def train(sess):
                                             [FLAGS.batch_size, NOISE_DIM]).astype(np.float32)
 
             if epoch % FLAGS.sample == 0 and index == 0:
-                print data_batch[0]
+                #print data_batch[:10]
                 summary, samples, gene_loss_value, disc_loss_value = sess.run(
                     [merged, sampler, gene_loss, disc_loss],
                     feed_dict={
@@ -229,13 +229,13 @@ def train(sess):
             if epoch % FLAGS.ckpt == 0 and index == 0:
                 save(sess, saver, CHECKPOINT_DIR, counter)
 
-            if index % 2 == 0:
-                _, gene_loss_value, disc_loss_value = sess.run(
-                    [disc_train_op, gene_loss, disc_loss],
-                    feed_dict={
-                        real_data_holder: data_batch,
-                        input_noise_holder: noise_batch
-                    })
+            #if index % 2 == 0:
+            _, gene_loss_value, disc_loss_value = sess.run(
+                [disc_train_op, gene_loss, disc_loss],
+                feed_dict={
+                    real_data_holder: data_batch,
+                    input_noise_holder: noise_batch
+                })
 
             _, gene_loss_value, disc_loss_value = sess.run(
                 [gene_train_op, gene_loss, disc_loss],
@@ -300,7 +300,7 @@ def generator(noise, is_train=True):
         with tf.variable_scope('hidden' + str(layer_num)):
             hidden = deconv2d(hidden, [FLAGS.batch_size, 20, 12, 1],
                               k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
-            hidden = tf.nn.sigmoid(hidden)
+            #hidden = tf.nn.sigmoid(hidden)
 
         layer_num += 1
         with tf.variable_scope('hidden' + str(layer_num)):
