@@ -278,10 +278,10 @@ def generator(noise, is_train=True):
 
         layer_num = 1
         with tf.variable_scope('hidden' + str(layer_num)):
-            hidden = linear(noise, NOISE_DIM * 1 * 32, 'fc_new')
+            hidden = linear(noise, 3 * 1 * 32, 'fc_new')
             hidden = tf.nn.relu(batch_norm(
                 hidden, train=is_train, name='bn_new'))
-            hidden = tf.reshape(hidden, [-1, NOISE_DIM, 1, 32])
+            hidden = tf.reshape(hidden, [-1, 3, 1, 32])
 
         layer_num += 1
         with tf.variable_scope('hidden' + str(layer_num)):

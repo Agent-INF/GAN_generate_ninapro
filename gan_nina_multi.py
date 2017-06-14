@@ -31,25 +31,26 @@ FLAG.DEFINE_integer('ckpt', 1, 'Save checkpoint every ? epochs.')
 FLAG.DEFINE_integer('sample', 1, 'Get sample every ? epochs.')
 FLAG.DEFINE_integer('gpu', 2, 'GPU No.')
 
-DATASET_NAME = 'nina001'
+DATASET_NAME = 'nina001_multi'
 DATA_PATH = 'data/' + DATASET_NAME + '.bin'
-CHECKPOINT_DIR = 'checkpoint/' + DATASET_NAME + '_new'
+CHECKPOINT_DIR = 'checkpoint/' + DATASET_NAME
 OLD_CHECKPOINT_DIR = 'checkpoint/mnist'
-LOG_DIR = 'log/' + DATASET_NAME + '_new'
-SAMPLE_DIR = 'samples/' + DATASET_NAME + '_new'
+LOG_DIR = 'log/' + DATASET_NAME
+SAMPLE_DIR = 'samples/' + DATASET_NAME
 
 BETA1 = 0.5
 BETA2 = 0.9
 LAMB_GP = 10
 
 DATA_DIM = 10
-NOISE_DIM = 3
+DATA_FRAME = 20
+NOISE_DIM = 30
 
 
 def train(sess):
 
     real_data_holder = tf.placeholder(
-        tf.float32, [FLAGS.batch_size, DATA_DIM], name='real_data')
+        tf.float32, [FLAGS.batch_size, DATA_FRAME, DATA_DIM, 1], name='real_data')
     input_noise_holder = tf.placeholder(
         tf.float32, [FLAGS.batch_size, NOISE_DIM], name='input_noise')
 
@@ -58,6 +59,7 @@ def train(sess):
     fake_score = discriminator(fake_data, reuse=True)
     sampler = generator(input_noise_holder, is_train=False)
     tf.summary.histogram('samples', sampler)
+    tf.summary.image('samples', sampler)
 
     all_vars = tf.trainable_variables()
     if FLAGS.diff_lr:
@@ -184,7 +186,7 @@ def train(sess):
             sio.savemat(matpath, {'data': samples, 'label': label,
                                   'repetition': repetition, 'shape': shape, 'subject': subject})
 
-            print samples[:10]
+            print samples[0]
 
             print(
                 '[Sample %2d] G_loss: %.8f, D_loss: %.8f'
@@ -214,7 +216,7 @@ def train(sess):
                     })
                 writer.add_summary(summary, epoch)
 
-                print samples[:10]
+                print samples[0]
 
                 print(
                     '[Getting Sample...] G_loss: %2.8f, D_loss: %2.8f'
@@ -253,8 +255,8 @@ def discriminator(data, reuse=False):
 
         layer_num = 1
         with tf.variable_scope('hidden' + str(layer_num)):
-            hidden = conv2d(tf.reshape(data, [-1, 10, 1, 1]),
-                            16, k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
+            hidden = conv2d(data, 16, k_h=3, k_w=3,
+                            d_h=2, d_w=2, name='conv_old')
             hidden = lrelu(batch_norm(hidden, name='bn_old'))
 
         layer_num += 1
@@ -278,30 +280,30 @@ def generator(noise, is_train=True):
 
         layer_num = 1
         with tf.variable_scope('hidden' + str(layer_num)):
-            hidden = linear(noise, NOISE_DIM * 1 * 32, 'fc_new')
+            hidden = linear(noise, 5 * 3 * 32, 'fc_new')
             hidden = tf.nn.relu(batch_norm(
                 hidden, train=is_train, name='bn_new'))
-            hidden = tf.reshape(hidden, [-1, NOISE_DIM, 1, 32])
+            hidden = tf.reshape(hidden, [-1, 5, 3, 32])
 
         layer_num += 1
         with tf.variable_scope('hidden' + str(layer_num)):
-            hidden = deconv2d(hidden, [FLAGS.batch_size, 6, 1, 16],
+            hidden = deconv2d(hidden, [FLAGS.batch_size, 10, 6, 16],
                               k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
             hidden = tf.nn.relu(batch_norm(
                 hidden, train=is_train, name='bn_old'))
 
         layer_num += 1
         with tf.variable_scope('hidden' + str(layer_num)):
-            hidden = deconv2d(hidden, [FLAGS.batch_size, 12, 1, 1],
+            hidden = deconv2d(hidden, [FLAGS.batch_size, 20, 12, 1],
                               k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
             hidden = tf.nn.sigmoid(hidden)
 
         layer_num += 1
         with tf.variable_scope('hidden' + str(layer_num)):
             hidden = tf.maximum(0.0024, hidden)
-            hidden = tf.reshape(hidden, [-1, 12])
+            #hidden = tf.reshape(hidden, [-1, 12])
 
-        return hidden[:, 1:11]
+        return hidden[:, :, 1:11]
 
 
 def save(sess, saver, checkpoint_dir, step):
@@ -332,12 +334,12 @@ def load(sess, saver, checkpoint_dir):
 
 def read_in_chunks(file_object, chunk_size):
     while True:
-        size = DATA_DIM
+        size = DATA_DIM * DATA_FRAME
         batch = np.fromfile(
             file_object, dtype=np.uint8, count=size * chunk_size)
         if batch is None:
             break
-        data = np.reshape(batch, (-1, DATA_DIM))
+        data = np.reshape(batch, (-1, DATA_FRAME, DATA_DIM, 1))
         yield data
 
 
