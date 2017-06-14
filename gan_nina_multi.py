@@ -58,8 +58,11 @@ def train(sess):
     real_score = discriminator(real_data_holder)
     fake_score = discriminator(fake_data, reuse=True)
     sampler = generator(input_noise_holder, is_train=False)
+
+    tf.summary.histogram('real_data', real_data_holder)
+    tf.summary.image('real_data', real_data_holder, max_outputs=10)
     tf.summary.histogram('samples', sampler)
-    tf.summary.image('samples', sampler)
+    tf.summary.image('samples', sampler, max_outputs=10)
 
     all_vars = tf.trainable_variables()
     if FLAGS.diff_lr:
