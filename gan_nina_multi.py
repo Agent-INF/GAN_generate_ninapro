@@ -30,8 +30,10 @@ FLAG.DEFINE_float(
 FLAG.DEFINE_integer('batch_size', 1024, 'Batch size.')
 FLAG.DEFINE_integer('ckpt', 1, 'Save checkpoint every ? epochs.')
 FLAG.DEFINE_integer('sample', 1, 'Get sample every ? epochs.')
-FLAG.DEFINE_integer('gene_iter', 1, 'Train generator how many times every batch.')
-FLAG.DEFINE_integer('disc_iter', 1, 'Train discriminator how many times every batch.')
+FLAG.DEFINE_integer(
+    'gene_iter', 1, 'Train generator how many times every batch.')
+FLAG.DEFINE_integer(
+    'disc_iter', 1, 'Train discriminator how many times every batch.')
 FLAG.DEFINE_integer('gpu', 2, 'GPU No.')
 
 #DATASET_NAME = 'nina001_multi'
@@ -188,10 +190,8 @@ def train(sess):
                 })
 
             data = np.squeeze(samples)
-            # print data[0, 0:2]
             data = np.reshape(
                 data, (FLAGS.batch_size * DATA_FRAME, DATA_DIM))
-            # print data[0:2]
             label = int(FLAGS.dataname)
             repetition = index
             shape = np.array(data.shape)
@@ -201,7 +201,6 @@ def train(sess):
             print label, repetition, shape, subject, matpath
             sio.savemat(matpath, {'data': data, 'label': label,
                                   'repetition': repetition, 'shape': shape, 'subject': subject})
-
             print(
                 '[Sample %2d] G_loss: %.8f, D_loss: %.8f'
                 % (index, gene_loss_value, disc_loss_value))
@@ -231,7 +230,7 @@ def train(sess):
                     })
                 writer.add_summary(summary, epoch)
 
-                #print samples[0]
+                # print samples[0]
 
                 print(
                     '[Getting Sample...] G_loss: %2.8f, D_loss: %2.8f'
