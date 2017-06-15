@@ -19,24 +19,27 @@ FLAG.DEFINE_float('learning_rate', 0.0001, 'Initial learning rate.')
 FLAG.DEFINE_integer('start_epoch', 0, 'Number of epoch to run at the start.')
 FLAG.DEFINE_integer('epoch', 1000, 'Number of epochs the trainer will run.')
 FLAG.DEFINE_boolean('is_test', False, 'Test or not.')
-FLAG.DEFINE_boolean('iwgan', False, 'Using improved wgan or not.')
+FLAG.DEFINE_boolean('iwgan', True, 'Using improved wgan or not.')
 FLAG.DEFINE_boolean('old_param', False, 'Saving new variables or not.')
 #FLAG.DEFINE_boolean('update_new', False, 'If True, only update new variables.')
 FLAG.DEFINE_boolean(
     'diff_lr', False, 'If True, using different learning rate.')
+FLAG.DEFINE_string('dataname', '001', 'The dataset name')
 FLAG.DEFINE_float(
     'old_lr', 0, 'When diff_lr is true, old param will use this learning_rate.')
 FLAG.DEFINE_integer('batch_size', 1024, 'Batch size.')
 FLAG.DEFINE_integer('ckpt', 1, 'Save checkpoint every ? epochs.')
 FLAG.DEFINE_integer('sample', 1, 'Get sample every ? epochs.')
+FLAG.DEFINE_integer('gene_iter', 1, 'Train generator how many times every batch.')
+FLAG.DEFINE_integer('disc_iter', 1, 'Train discriminator how many times every batch.')
 FLAG.DEFINE_integer('gpu', 2, 'GPU No.')
 
-DATASET_NAME = 'nina001_multi'
-DATA_PATH = 'data/' + DATASET_NAME + '.bin'
-CHECKPOINT_DIR = 'checkpoint/' + DATASET_NAME
+#DATASET_NAME = 'nina001_multi'
+DATA_PATH = 'data/nina/' + FLAGS.dataname + '.bin'
+CHECKPOINT_DIR = 'checkpoint/' + FLAGS.dataname
 OLD_CHECKPOINT_DIR = 'checkpoint/mnist'
-LOG_DIR = 'log/' + DATASET_NAME
-SAMPLE_DIR = 'samples/' + DATASET_NAME
+LOG_DIR = 'log/' + FLAGS.dataname
+SAMPLE_DIR = 'samples/' + FLAGS.dataname
 
 BETA1 = 0.5
 BETA2 = 0.9
@@ -59,10 +62,11 @@ def train(sess):
     fake_score = discriminator(fake_data, reuse=True)
     sampler = generator(input_noise_holder, is_train=False)
 
-    tf.summary.histogram('real_data', real_data_holder)
-    tf.summary.image('real_data', real_data_holder, max_outputs=10)
-    tf.summary.histogram('samples', sampler)
-    tf.summary.image('samples', sampler, max_outputs=10)
+    if not FLAGS.is_test:
+        tf.summary.histogram('real_data', real_data_holder)
+        tf.summary.image('real_data', real_data_holder, max_outputs=10)
+        tf.summary.histogram('samples', sampler)
+        tf.summary.image('samples', sampler, max_outputs=10)
 
     all_vars = tf.trainable_variables()
     if FLAGS.diff_lr:
@@ -78,18 +82,7 @@ def train(sess):
         gene_vars = [var for var in all_vars if 'generator' in var.name]
         disc_vars = [var for var in all_vars if 'discriminator' in var.name]
 
-    if not FLAGS.iwgan:
-        all_score = tf.concat([real_score, fake_score], axis=0)
-        labels_gene = tf.ones([FLAGS.batch_size])
-        labels_disc = tf.concat(
-            [tf.ones([FLAGS.batch_size]), tf.zeros([FLAGS.batch_size])], axis=0)
-        gene_loss = tf.reduce_mean(
-            tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=labels_gene, logits=fake_score))
-        disc_loss = tf.reduce_mean(
-            tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=labels_disc, logits=all_score))
-    else:
+    if FLAGS.iwgan:
         gene_loss = -tf.reduce_mean(fake_score)
         disc_loss = tf.reduce_mean(fake_score) - tf.reduce_mean(real_score)
         alpha = tf.random_uniform(
@@ -105,9 +98,21 @@ def train(sess):
             tf.square(gradients), reduction_indices=[1]))
         gradient_penalty = tf.reduce_mean((slopes - 1.)**2)
         disc_loss += LAMB_GP * gradient_penalty
+    else:
+        all_score = tf.concat([real_score, fake_score], axis=0)
+        labels_gene = tf.ones([FLAGS.batch_size])
+        labels_disc = tf.concat(
+            [tf.ones([FLAGS.batch_size]), tf.zeros([FLAGS.batch_size])], axis=0)
+        gene_loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=labels_gene, logits=fake_score))
+        disc_loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=labels_disc, logits=all_score))
 
-    if FLAGS.diff_lr:
-
+    if FLAGS.is_test:
+        pass
+    elif FLAGS.diff_lr:
         new_opt = tf.train.AdamOptimizer(FLAGS.learning_rate, BETA1)
         old_opt = tf.train.AdamOptimizer(FLAGS.old_lr, BETA1)
 
@@ -136,10 +141,11 @@ def train(sess):
             FLAGS.learning_rate, BETA1).minimize(
                 disc_loss, var_list=disc_vars)
 
-    tf.summary.scalar('gene_loss', gene_loss)
-    tf.summary.scalar('disc_loss', disc_loss)
-    merged = tf.summary.merge_all()
-    writer = tf.summary.FileWriter(LOG_DIR, sess.graph)
+    if not FLAGS.is_test:
+        tf.summary.scalar('gene_loss', gene_loss)
+        tf.summary.scalar('disc_loss', disc_loss)
+        merged = tf.summary.merge_all()
+        writer = tf.summary.FileWriter(LOG_DIR, sess.graph)
 
     tf.global_variables_initializer().run()
 
@@ -166,30 +172,35 @@ def train(sess):
     start_time = time.time()
 
     if FLAGS.is_test:
-        noise_batch = np.random.uniform(-1, 1,
-                                        [FLAGS.batch_size, NOISE_DIM]).astype(np.float32)
 
         index = 0
         file_object = open(DATA_PATH, 'rb')
         for data_batch in read_in_chunks(file_object, FLAGS.batch_size):
             if data_batch.shape[0] != FLAGS.batch_size:
                 break
+            noise_batch = np.random.uniform(-1, 1,
+                                            [FLAGS.batch_size, NOISE_DIM]).astype(np.float32)
             samples, gene_loss_value, disc_loss_value = sess.run(
                 [sampler, gene_loss, disc_loss],
                 feed_dict={
                     real_data_holder: data_batch,
                     input_noise_holder: noise_batch
                 })
-            label = 1
-            repetition = index
-            shape = np.array(samples.shape)
-            subject = 0
-            matpath = SAMPLE_DIR + '/000_001_%03d.mat' % repetition
-            print label, repetition, shape, subject, matpath
-            sio.savemat(matpath, {'data': samples, 'label': label,
-                                  'repetition': repetition, 'shape': shape, 'subject': subject})
 
-            print samples[0]
+            data = np.squeeze(samples)
+            # print data[0, 0:2]
+            data = np.reshape(
+                data, (FLAGS.batch_size * DATA_FRAME, DATA_DIM))
+            # print data[0:2]
+            label = int(FLAGS.dataname)
+            repetition = index
+            shape = np.array(data.shape)
+            subject = 0
+            matpath = SAMPLE_DIR + \
+                '/000_%s_%03d.mat' % (FLAGS.dataname, repetition)
+            print label, repetition, shape, subject, matpath
+            sio.savemat(matpath, {'data': data, 'label': label,
+                                  'repetition': repetition, 'shape': shape, 'subject': subject})
 
             print(
                 '[Sample %2d] G_loss: %.8f, D_loss: %.8f'
@@ -211,7 +222,7 @@ def train(sess):
                                             [FLAGS.batch_size, NOISE_DIM]).astype(np.float32)
 
             if epoch % FLAGS.sample == 0 and index == 0:
-                #print data_batch[:10]
+                # print data_batch[:10]
                 summary, samples, gene_loss_value, disc_loss_value = sess.run(
                     [merged, sampler, gene_loss, disc_loss],
                     feed_dict={
@@ -220,7 +231,7 @@ def train(sess):
                     })
                 writer.add_summary(summary, epoch)
 
-                print samples[0]
+                #print samples[0]
 
                 print(
                     '[Getting Sample...] G_loss: %2.8f, D_loss: %2.8f'
@@ -229,20 +240,21 @@ def train(sess):
             if epoch % FLAGS.ckpt == 0 and index == 0:
                 save(sess, saver, CHECKPOINT_DIR, counter)
 
-            #if index % 2 == 0:
-            _, gene_loss_value, disc_loss_value = sess.run(
-                [disc_train_op, gene_loss, disc_loss],
-                feed_dict={
-                    real_data_holder: data_batch,
-                    input_noise_holder: noise_batch
-                })
+            for _ in xrange(FLAGS.disc_iter):
+                _, gene_loss_value, disc_loss_value = sess.run(
+                    [disc_train_op, gene_loss, disc_loss],
+                    feed_dict={
+                        real_data_holder: data_batch,
+                        input_noise_holder: noise_batch
+                    })
 
-            _, gene_loss_value, disc_loss_value = sess.run(
-                [gene_train_op, gene_loss, disc_loss],
-                feed_dict={
-                    real_data_holder: data_batch,
-                    input_noise_holder: noise_batch
-                })
+            for _ in xrange(FLAGS.gene_iter):
+                _, gene_loss_value, disc_loss_value = sess.run(
+                    [gene_train_op, gene_loss, disc_loss],
+                    feed_dict={
+                        real_data_holder: data_batch,
+                        input_noise_holder: noise_batch
+                    })
             if index % 10 == 0:
                 print(
                     'Epoch: %3d batch: %4d time: %4.2f, G_loss: %2.8f, D_loss: %2.8f'
@@ -383,6 +395,7 @@ def save_all_data(epoch, index, input_image):
 
 def main(_):
 
+    print 'dataname is:      ' + str(FLAGS.dataname)
     print 'learning_rate is: ' + str(FLAGS.learning_rate)
     print 'epoch is:         ' + str(FLAGS.epoch)
     print 'start_epoch is:   ' + str(FLAGS.start_epoch)
