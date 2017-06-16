@@ -276,14 +276,14 @@ def discriminator(data, reuse=False):
     layer_num = 1
     with tf.variable_scope('hidden' + str(layer_num)):
       hidden = conv2d(data, 16, k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
-      #hidden = lrelu(batch_norm(hidden, name='bn_old'))
-      hidden = prelu(batch_norm(hidden, name='bn_old'))
+      hidden = lrelu(batch_norm(hidden, name='bn_old'))
+      #hidden = prelu(batch_norm(hidden, name='bn_old'))
 
     layer_num += 1
     with tf.variable_scope('hidden' + str(layer_num)):
       hidden = conv2d(hidden, 32, k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
-      #hidden = lrelu(batch_norm(hidden, name='bn_old'))
-      hidden = prelu(batch_norm(hidden, name='bn_old'))
+      hidden = lrelu(batch_norm(hidden, name='bn_old'))
+      #hidden = prelu(batch_norm(hidden, name='bn_old'))
 
     layer_num += 1
     with tf.variable_scope('hidden' + str(layer_num)):
@@ -403,6 +403,7 @@ def save_all_data(epoch, index, input_image):
 def main(_):
 
   print 'dataname is:      ' + str(FLAGS.dataname)
+  print 'fresh_start is:   ' + str(FLAGS.fresh_start)
   print 'learning_rate is: ' + str(FLAGS.learning_rate)
   print 'epoch is:         ' + str(FLAGS.epoch)
   print 'start_epoch is:   ' + str(FLAGS.start_epoch)
@@ -418,7 +419,7 @@ def main(_):
 
   if os.path.exists(CHECKPOINT_DIR) and FLAGS.fresh_start:
     shutil.rmtree(CHECKPOINT_DIR)
-  elif not os.path.exists(LOG_DIR):
+  elif not os.path.exists(CHECKPOINT_DIR):
     os.makedirs(CHECKPOINT_DIR)
   if os.path.exists(LOG_DIR) and FLAGS.fresh_start:
     shutil.rmtree(LOG_DIR)

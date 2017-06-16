@@ -441,7 +441,7 @@ def main(_):
 
   if os.path.exists(CHECKPOINT_DIR) and FLAGS.fresh_start:
     shutil.rmtree(CHECKPOINT_DIR)
-  elif not os.path.exists(LOG_DIR):
+  elif not os.path.exists(CHECKPOINT_DIR):
     os.makedirs(CHECKPOINT_DIR)
   if os.path.exists(LOG_DIR) and FLAGS.fresh_start:
     shutil.rmtree(LOG_DIR)
