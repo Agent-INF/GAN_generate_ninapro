@@ -37,19 +37,19 @@ FLAG.DEFINE_integer('disc_iter', 1,
                     'Train discriminator how many times every batch.')
 FLAG.DEFINE_integer('gpu', 0, 'GPU No.')
 
-DATA_PATH = 'data/nina/' + FLAGS.dataname + '.bin'
-CHECKPOINT_DIR = 'checkpoint/dev0_' + FLAGS.dataname
+DATA_PATH = 'data/single/' + FLAGS.dataname + '.bin'
+CHECKPOINT_DIR = 'checkpoint/dev0s_' + FLAGS.dataname
 OLD_CHECKPOINT_DIR = 'checkpoint/mnist'
-LOG_DIR = 'log/dev0_' + FLAGS.dataname
-SAMPLE_DIR = 'samples/dev0_' + FLAGS.dataname
+LOG_DIR = 'log/dev0s_' + FLAGS.dataname
+SAMPLE_DIR = 'samples/dev0s_' + FLAGS.dataname
 
 BETA1 = 0.5
 BETA2 = 0.9
 LAMB_GP = 10
 
 DATA_DIM = 10
-DATA_FRAME = 20
-NOISE_DIM = 64
+DATA_FRAME = 1
+NOISE_DIM = 3
 
 HIDDEN_FRAME = int(math.ceil(DATA_FRAME / 4))
 HIDDEN_DIM = int(math.ceil(DATA_DIM / 4))
@@ -277,23 +277,17 @@ def discriminator(data, reuse=False):
     with tf.variable_scope('hidden' + str(layer_num)):
       hidden = conv2d(data, 16, k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
       hidden = lrelu(batch_norm(hidden, name='bn_old'))
+      #hidden = prelu(batch_norm(hidden, name='bn_old'))
 
     layer_num += 1
     with tf.variable_scope('hidden' + str(layer_num)):
       hidden = conv2d(hidden, 32, k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
       hidden = lrelu(batch_norm(hidden, name='bn_old'))
+      #hidden = prelu(batch_norm(hidden, name='bn_old'))
 
     layer_num += 1
     with tf.variable_scope('hidden' + str(layer_num)):
-      hidden = linear(tf.reshape(hidden, [FLAGS.batch_size, -1]), 512, 'fc_new')
-
-    layer_num += 1
-    with tf.variable_scope('hidden' + str(layer_num)):
-      hidden = linear(hidden, 256, 'fc_new')
-
-    layer_num += 1
-    with tf.variable_scope('hidden' + str(layer_num)):
-      hidden = linear(hidden, 1, 'fc_new')
+      hidden = linear(tf.reshape(hidden, [FLAGS.batch_size, -1]), 1, 'fc_new')
 
     return hidden[:, 0]
 
@@ -409,6 +403,7 @@ def save_all_data(epoch, index, input_image):
 def main(_):
 
   print 'dataname is:      ' + str(FLAGS.dataname)
+  print 'fresh_start is:   ' + str(FLAGS.fresh_start)
   print 'learning_rate is: ' + str(FLAGS.learning_rate)
   print 'epoch is:         ' + str(FLAGS.epoch)
   print 'start_epoch is:   ' + str(FLAGS.start_epoch)
@@ -430,7 +425,7 @@ def main(_):
     shutil.rmtree(LOG_DIR)
   elif not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
-  if not os.path.exists(SAMPLE_DIR):
+  if not os.path.exists(SAMPLE_DIR) and FLAGS.is_test:
     os.makedirs(SAMPLE_DIR)
 
   run_config = tf.ConfigProto(allow_soft_placement=True)

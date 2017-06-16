@@ -37,19 +37,19 @@ FLAG.DEFINE_integer('disc_iter', 1,
                     'Train discriminator how many times every batch.')
 FLAG.DEFINE_integer('gpu', 1, 'GPU No.')
 
-DATA_PATH = 'data/nina/' + FLAGS.dataname + '.bin'
-CHECKPOINT_DIR = 'checkpoint/dev1_' + FLAGS.dataname
+DATA_PATH = 'data/single/' + FLAGS.dataname + '.bin'
+CHECKPOINT_DIR = 'checkpoint/dev0s_' + FLAGS.dataname
 OLD_CHECKPOINT_DIR = 'checkpoint/mnist'
-LOG_DIR = 'log/dev1_' + FLAGS.dataname
-SAMPLE_DIR = 'samples/dev1_' + FLAGS.dataname
+LOG_DIR = 'log/dev0s_' + FLAGS.dataname
+SAMPLE_DIR = 'samples/dev0s_' + FLAGS.dataname
 
 BETA1 = 0.5
 BETA2 = 0.9
 LAMB_GP = 10
 
 DATA_DIM = 10
-DATA_FRAME = 20
-NOISE_DIM = 64
+DATA_FRAME = 1
+NOISE_DIM = 3
 
 HIDDEN_FRAME = int(math.ceil(DATA_FRAME / 4))
 HIDDEN_DIM = int(math.ceil(DATA_DIM / 4))
@@ -425,7 +425,7 @@ def main(_):
     shutil.rmtree(LOG_DIR)
   elif not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
-  if not os.path.exists(SAMPLE_DIR):
+  if not os.path.exists(SAMPLE_DIR) and FLAGS.is_test:
     os.makedirs(SAMPLE_DIR)
 
   run_config = tf.ConfigProto(allow_soft_placement=True)
