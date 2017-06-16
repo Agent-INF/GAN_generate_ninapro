@@ -1,5 +1,6 @@
 from __future__ import division
 import os
+import shutil
 #import sys
 import time
 import math
@@ -16,12 +17,13 @@ FLAG = tf.app.flags
 FLAGS = FLAG.FLAGS
 
 FLAG.DEFINE_float('learning_rate', 0.0002, 'Initial learning rate.')
+FLAG.DEFINE_boolean('fresh_start', False,
+                    'Fresh start will delele all logs and checkpoints')
 FLAG.DEFINE_integer('start_epoch', 0, 'Number of epoch to run at the start.')
 FLAG.DEFINE_integer('epoch', 1000, 'Number of epochs the trainer will run.')
 FLAG.DEFINE_boolean('is_test', False, 'Test or not.')
 FLAG.DEFINE_boolean('iwgan', True, 'Using improved wgan or not.')
 FLAG.DEFINE_boolean('old_param', False, 'Saving new variables or not.')
-#FLAG.DEFINE_boolean('update_new', False, 'If True, only update new variables.')
 FLAG.DEFINE_boolean('diff_lr', False, 'If True, using different learning rate.')
 FLAG.DEFINE_string('dataname', '001', 'The dataset name')
 FLAG.DEFINE_float(
@@ -283,7 +285,15 @@ def discriminator(data, reuse=False):
 
     layer_num += 1
     with tf.variable_scope('hidden' + str(layer_num)):
-      hidden = linear(tf.reshape(hidden, [FLAGS.batch_size, -1]), 1, 'fc_new')
+      hidden = linear(tf.reshape(hidden, [FLAGS.batch_size, -1]), 512, 'fc_new')
+
+    layer_num += 1
+    with tf.variable_scope('hidden' + str(layer_num)):
+      hidden = linear(hidden, 256, 'fc_new')
+
+    layer_num += 1
+    with tf.variable_scope('hidden' + str(layer_num)):
+      hidden = linear(hidden, 1, 'fc_new')
 
     return hidden[:, 0]
 
@@ -412,9 +422,13 @@ def main(_):
   print 'sample is:        ' + str(FLAGS.sample)
   print 'gpu is:           ' + str(FLAGS.gpu)
 
-  if not os.path.exists(CHECKPOINT_DIR):
+  if os.path.exists(CHECKPOINT_DIR) and FLAGS.fresh_start:
+    shutil.rmtree(CHECKPOINT_DIR)
+  elif not os.path.exists(LOG_DIR):
     os.makedirs(CHECKPOINT_DIR)
-  if not os.path.exists(LOG_DIR):
+  if os.path.exists(LOG_DIR) and FLAGS.fresh_start:
+    shutil.rmtree(LOG_DIR)
+  elif not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
   if not os.path.exists(SAMPLE_DIR):
     os.makedirs(SAMPLE_DIR)

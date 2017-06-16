@@ -35,13 +35,13 @@ FLAG.DEFINE_integer('gene_iter', 1,
                     'Train generator how many times every batch.')
 FLAG.DEFINE_integer('disc_iter', 1,
                     'Train discriminator how many times every batch.')
-FLAG.DEFINE_integer('gpu', 1, 'GPU No.')
+FLAG.DEFINE_integer('gpu', 3, 'GPU No.')
 
 DATA_PATH = 'data/nina/' + FLAGS.dataname + '.bin'
-CHECKPOINT_DIR = 'checkpoint/dev1_' + FLAGS.dataname
+CHECKPOINT_DIR = 'checkpoint/dev3_' + FLAGS.dataname
 OLD_CHECKPOINT_DIR = 'checkpoint/mnist'
-LOG_DIR = 'log/dev1_' + FLAGS.dataname
-SAMPLE_DIR = 'samples/dev1_' + FLAGS.dataname
+LOG_DIR = 'log/dev3_' + FLAGS.dataname
+SAMPLE_DIR = 'samples/dev3_' + FLAGS.dataname
 
 BETA1 = 0.5
 BETA2 = 0.9
@@ -54,12 +54,12 @@ NOISE_DIM = 64
 HIDDEN_FRAME = int(math.ceil(DATA_FRAME / 4))
 HIDDEN_DIM = int(math.ceil(DATA_DIM / 4))
 
-HIDDEN_HEIGHT = np.array([HIDDEN_FRAME, HIDDEN_FRAME * 2, HIDDEN_FRAME * 4])
-HIDDEN_WIDTH = np.array([HIDDEN_DIM, HIDDEN_DIM * 2, HIDDEN_DIM * 4])
+HID_H = np.array([HIDDEN_FRAME, HIDDEN_FRAME * 2, HIDDEN_FRAME * 4])
+HID_W = np.array([HIDDEN_DIM, HIDDEN_DIM * 2, HIDDEN_DIM * 4])
 
-H_CROP_S = int((HIDDEN_HEIGHT[2] - DATA_FRAME) / 2)
+H_CROP_S = int((HID_H[2] - DATA_FRAME) / 2)
 H_CROP_E = int(H_CROP_S + DATA_FRAME)
-W_CROP_S = int((HIDDEN_WIDTH[2] - DATA_DIM) / 2)
+W_CROP_S = int((HID_W[2] - DATA_DIM) / 2)
 W_CROP_E = int(W_CROP_S + DATA_DIM)
 
 
@@ -275,19 +275,30 @@ def discriminator(data, reuse=False):
 
     layer_num = 1
     with tf.variable_scope('hidden' + str(layer_num)):
-      hidden = conv2d(data, 16, k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
-      #hidden = lrelu(batch_norm(hidden, name='bn_old'))
+      hidden = conv2d(data, 32, k_h=3, k_w=3, d_h=1, d_w=1, name='conv_old')
+      hidden = prelu(batch_norm(hidden, name='bn_old'))
+
+    layer_num += 1
+    with tf.variable_scope('hidden' + str(layer_num)):
+      hidden = conv2d(hidden, 64, k_h=3, k_w=3, d_h=1, d_w=1, name='conv_old')
       hidden = prelu(batch_norm(hidden, name='bn_old'))
 
     layer_num += 1
     with tf.variable_scope('hidden' + str(layer_num)):
       hidden = conv2d(hidden, 32, k_h=3, k_w=3, d_h=2, d_w=2, name='conv_old')
-      #hidden = lrelu(batch_norm(hidden, name='bn_old'))
       hidden = prelu(batch_norm(hidden, name='bn_old'))
 
     layer_num += 1
     with tf.variable_scope('hidden' + str(layer_num)):
-      hidden = linear(tf.reshape(hidden, [FLAGS.batch_size, -1]), 1, 'fc_new')
+      hidden = linear(tf.reshape(hidden, [FLAGS.batch_size, -1]), 512, 'fc_new')
+
+    layer_num += 1
+    with tf.variable_scope('hidden' + str(layer_num)):
+      hidden = linear(tf.reshape(hidden, [FLAGS.batch_size, -1]), 128, 'fc_new')
+
+    layer_num += 1
+    with tf.variable_scope('hidden' + str(layer_num)):
+      hidden = linear(hidden, 1, 'fc_new')
 
     return hidden[:, 0]
 
@@ -299,30 +310,41 @@ def generator(noise, is_train=True):
 
     layer_num = 1
     with tf.variable_scope('hidden' + str(layer_num)):
-      hidden = linear(noise, HIDDEN_HEIGHT[0] * HIDDEN_WIDTH[0] * 32, 'fc_new')
+      hidden = linear(noise, HID_H[0] * HID_W[0] * 32, 'fc_new')
       hidden = tf.nn.relu(batch_norm(hidden, train=is_train, name='bn_new'))
-      hidden = tf.reshape(hidden, [-1, HIDDEN_HEIGHT[0], HIDDEN_WIDTH[0], 32])
+      hidden = tf.reshape(hidden, [-1, HID_H[0], HID_W[0], 32])
 
     layer_num += 1
     with tf.variable_scope('hidden' + str(layer_num)):
       hidden = deconv2d(
-          hidden, [FLAGS.batch_size, HIDDEN_HEIGHT[1], HIDDEN_WIDTH[1], 16],
+          hidden, [FLAGS.batch_size, HID_H[1], HID_W[1], 64],
           k_h=3,
           k_w=3,
           d_h=2,
           d_w=2,
-          name='conv_old')
+          name='deconv_old')
       hidden = tf.nn.relu(batch_norm(hidden, train=is_train, name='bn_old'))
 
     layer_num += 1
     with tf.variable_scope('hidden' + str(layer_num)):
       hidden = deconv2d(
-          hidden, [FLAGS.batch_size, HIDDEN_HEIGHT[2], HIDDEN_WIDTH[2], 1],
+          hidden, [FLAGS.batch_size, HID_H[1], HID_W[1], 32],
+          k_h=3,
+          k_w=3,
+          d_h=1,
+          d_w=1,
+          name='deconv_old')
+      hidden = tf.nn.relu(batch_norm(hidden, train=is_train, name='bn_old'))
+
+    layer_num += 1
+    with tf.variable_scope('hidden' + str(layer_num)):
+      hidden = deconv2d(
+          hidden, [FLAGS.batch_size, HID_H[2], HID_W[2], 1],
           k_h=3,
           k_w=3,
           d_h=2,
           d_w=2,
-          name='conv_old')
+          name='deconv_old')
       #hidden = tf.nn.sigmoid(hidden)
 
     layer_num += 1
@@ -403,6 +425,7 @@ def save_all_data(epoch, index, input_image):
 def main(_):
 
   print 'dataname is:      ' + str(FLAGS.dataname)
+  print 'fresh_start is:   ' + str(FLAGS.fresh_start)
   print 'learning_rate is: ' + str(FLAGS.learning_rate)
   print 'epoch is:         ' + str(FLAGS.epoch)
   print 'start_epoch is:   ' + str(FLAGS.start_epoch)

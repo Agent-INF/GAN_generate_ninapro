@@ -2,20 +2,14 @@ import math
 import numpy as np
 import tensorflow as tf
 
-image_summary = tf.summary.image
-scalar_summary = tf.summary.scalar
-histogram_summary = tf.summary.histogram
-merge_summary = tf.summary.merge
-SummaryWriter = tf.summary.FileWriter
-
 
 def concat(tensors, axis, *args, **kwargs):
   return tf.concat(tensors, axis, *args, **kwargs)
 
 
-def batch_norm(x, train=True, epsilon=1e-5, momentum=0.9, name="batch_norm"):
+def batch_norm(_x, train=True, epsilon=1e-5, momentum=0.9, name="batch_norm"):
   return tf.contrib.layers.batch_norm(
-      x,
+      _x,
       decay=momentum,
       updates_collections=None,
       epsilon=epsilon,
@@ -24,12 +18,13 @@ def batch_norm(x, train=True, epsilon=1e-5, momentum=0.9, name="batch_norm"):
       scope=name)
 
 
-def conv_cond_concat(x, y):
+def conv_cond_concat(_x, _y):
   """Concatenate conditioning vector on feature map axis."""
-  x_shapes = x.get_shape()
-  y_shapes = y.get_shape()
+  x_shapes = _x.get_shape()
+  y_shapes = _y.get_shape()
   return concat(
-      [x, y * tf.ones([x_shapes[0], x_shapes[1], x_shapes[2], y_shapes[3]])], 3)
+      [_x,
+       _y * tf.ones([x_shapes[0], x_shapes[1], x_shapes[2], y_shapes[3]])], 3)
 
 
 def conv2d(input_,
@@ -87,11 +82,23 @@ def deconv2d(input_,
       return deconv
 
 
-def lrelu(x, leak=0.2, name="lrelu"):
-  return tf.maximum(x, leak * x)
+def lrelu(_x, leak=0.2):
+  return tf.maximum(_x, leak * _x)
 
 
-def pooling(x,
+def prelu(_x, name='prelu'):
+  with tf.variable_scope(name):
+    alphas = tf.get_variable(
+        'alpha',
+        _x.get_shape()[-1],
+        initializer=tf.constant_initializer(0.0),
+        dtype=tf.float32)
+    pos = tf.nn.relu(_x)
+    neg = tf.multiply(alphas, (_x - tf.abs(_x))) * 0.5
+  return pos + neg
+
+
+def pooling(_x,
             ksize=[1, 2, 2, 1],
             strides=[1, 2, 2, 1],
             padding='SAME',
@@ -99,10 +106,10 @@ def pooling(x,
             pooltype='max'):
   if pooltype == 'max':
     return tf.nn.max_pool(
-        x, ksize=ksize, strides=strides, padding=padding, name=name)
+        _x, ksize=ksize, strides=strides, padding=padding, name=name)
   elif pooltype == 'avg':
     return tf.nn.avg_pool(
-        x, ksize=ksize, strides=strides, padding=padding, name=name)
+        _x, ksize=ksize, strides=strides, padding=padding, name=name)
   else:
     print 'pooling type error!'
     return
