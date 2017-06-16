@@ -21,24 +21,25 @@ FLAG.DEFINE_integer('epoch', 1000, 'Number of epochs the trainer will run.')
 FLAG.DEFINE_boolean('is_test', False, 'Test or not.')
 FLAG.DEFINE_boolean('iwgan', True, 'Using improved wgan or not.')
 FLAG.DEFINE_boolean('old_param', False, 'Saving new variables or not.')
+#FLAG.DEFINE_boolean('update_new', False, 'If True, only update new variables.')
 FLAG.DEFINE_boolean('diff_lr', False, 'If True, using different learning rate.')
 FLAG.DEFINE_string('dataname', '001', 'The dataset name')
 FLAG.DEFINE_float(
     'old_lr', 0, 'When diff_lr is true, old param will use this learning_rate.')
 FLAG.DEFINE_integer('batch_size', 1024, 'Batch size.')
-FLAG.DEFINE_integer('ckpt', 100, 'Save checkpoint every ? epochs.')
-FLAG.DEFINE_integer('log', 10, 'Get sample every ? epochs.')
+FLAG.DEFINE_integer('ckpt', 1, 'Save checkpoint every ? epochs.')
+FLAG.DEFINE_integer('sample', 1, 'Get sample every ? epochs.')
 FLAG.DEFINE_integer('gene_iter', 1,
                     'Train generator how many times every batch.')
 FLAG.DEFINE_integer('disc_iter', 1,
                     'Train discriminator how many times every batch.')
-FLAG.DEFINE_integer('gpu', 2, 'GPU No.')
+FLAG.DEFINE_integer('gpu', 0, 'GPU No.')
 
-DATA_PATH = 'data/nina/' + FLAGS.dataname + '.tfrecords'
-CHECKPOINT_DIR = 'checkpoint/dev' + FLAGS.dataname
+DATA_PATH = 'data/nina/' + FLAGS.dataname + '.bin'
+CHECKPOINT_DIR = 'checkpoint/dev0_' + FLAGS.dataname
 OLD_CHECKPOINT_DIR = 'checkpoint/mnist'
-LOG_DIR = 'log/dev' + FLAGS.dataname
-SAMPLE_DIR = 'samples/dev' + FLAGS.dataname
+LOG_DIR = 'log/dev0_' + FLAGS.dataname
+SAMPLE_DIR = 'samples/dev0_' + FLAGS.dataname
 
 BETA1 = 0.5
 BETA2 = 0.9
@@ -46,7 +47,7 @@ LAMB_GP = 10
 
 DATA_DIM = 10
 DATA_FRAME = 20
-NOISE_DIM = 30
+NOISE_DIM = 64
 
 HIDDEN_FRAME = int(math.ceil(DATA_FRAME / 4))
 HIDDEN_DIM = int(math.ceil(DATA_DIM / 4))
@@ -62,7 +63,8 @@ W_CROP_E = int(W_CROP_S + DATA_DIM)
 
 def train(sess):
 
-  real_data_holder, _ = read_data(DATA_PATH, FLAGS.epoch, FLAGS.batch_size)
+  real_data_holder = tf.placeholder(
+      tf.float32, [FLAGS.batch_size, DATA_FRAME, DATA_DIM, 1], name='real_data')
   input_noise_holder = tf.placeholder(
       tf.float32, [FLAGS.batch_size, NOISE_DIM], name='input_noise')
 
@@ -148,9 +150,7 @@ def train(sess):
     merged = tf.summary.merge_all()
     writer = tf.summary.FileWriter(LOG_DIR, sess.graph)
 
-  init_op = tf.group(tf.global_variables_initializer(),
-                     tf.local_variables_initializer())
-  sess.run(init_op)
+  tf.global_variables_initializer().run()
 
   counter = 1
   saver = tf.train.Saver()
@@ -173,75 +173,97 @@ def train(sess):
   else:
     print ' [!] Load failed...'
 
-  coord = tf.train.Coordinator()
-  threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+  start_time = time.time()
 
   if FLAGS.is_test:
-    try:
-      index = 0
-      while not coord.should_stop():
-        noise_batch = np.random.uniform(-1, 1, [FLAGS.batch_size,
-                                                NOISE_DIM]).astype(np.float32)
-        samples, gene_loss_value, disc_loss_value = sess.run(
-            [sampler, gene_loss, disc_loss],
-            feed_dict={input_noise_holder: noise_batch})
-        data = np.squeeze(samples)
-        data = np.reshape(data, (FLAGS.batch_size * DATA_FRAME, DATA_DIM))
-        label = int(FLAGS.dataname)
-        repetition = index
-        shape = np.array(data.shape)
-        subject = 0
-        matpath = SAMPLE_DIR + \
-            '/000_%s_%03d.mat' % (FLAGS.dataname, repetition)
-        print label, repetition, shape, subject, matpath
-        sio.savemat(matpath, {
-            'data': data,
-            'label': label,
-            'repetition': repetition,
-            'shape': shape,
-            'subject': subject
-        })
-        print('[Sample %2d] G_loss: %.8f, D_loss: %.8f' %
-              (index, gene_loss_value, disc_loss_value))
 
-        index += 1
-        if index >= FLAGS.epoch:
-          break
-    except tf.errors.OutOfRangeError:
-      print 'Done training for %d epochs, %d steps.' % (FLAGS.epoch, counter)
-    finally:
-      coord.request_stop()
-  else:
-    try:
-      while not coord.should_stop():
-        noise_batch = np.random.uniform(-1, 1, [FLAGS.batch_size,
-                                                NOISE_DIM]).astype(np.float32)
-        for _ in xrange(FLAGS.disc_iter):
-          _, gene_loss_value, disc_loss_value = sess.run(
-              [disc_train_op, gene_loss, disc_loss],
-              feed_dict={input_noise_holder: noise_batch})
-        for _ in xrange(FLAGS.gene_iter):
-          _, gene_loss_value, disc_loss_value = sess.run(
-              [gene_train_op, gene_loss, disc_loss],
-              feed_dict={input_noise_holder: noise_batch})
-        if (counter - 1) % FLAGS.log == 0:
-          print('step: %4d, G_loss: %2.8f, D_loss: %2.8f' %
-                (counter - 1, gene_loss_value, disc_loss_value))
-          summary, samples = sess.run(
-              [merged, sampler], feed_dict={input_noise_holder: noise_batch})
-          writer.add_summary(summary, counter)
+    index = 0
+    file_object = open(DATA_PATH, 'rb')
+    for data_batch in read_in_chunks(file_object, FLAGS.batch_size):
+      if data_batch.shape[0] != FLAGS.batch_size:
+        break
+      noise_batch = np.random.uniform(-1, 1, [FLAGS.batch_size,
+                                              NOISE_DIM]).astype(np.float32)
+      samples, gene_loss_value, disc_loss_value = sess.run(
+          [sampler, gene_loss, disc_loss],
+          feed_dict={
+              real_data_holder: data_batch,
+              input_noise_holder: noise_batch
+          })
 
-        if (counter - 1) % FLAGS.ckpt == 0:
-          save(sess, saver, CHECKPOINT_DIR, counter)
+      data = np.squeeze(samples)
+      data = np.reshape(data, (FLAGS.batch_size * DATA_FRAME, DATA_DIM))
+      label = int(FLAGS.dataname)
+      repetition = index
+      shape = np.array(data.shape)
+      subject = 0
+      matpath = SAMPLE_DIR + '/000_%s_%03d.mat' % (FLAGS.dataname, repetition)
+      print label, repetition, shape, subject, matpath
+      sio.savemat(matpath, {
+          'data': data,
+          'label': label,
+          'repetition': repetition,
+          'shape': shape,
+          'subject': subject
+      })
+      print('[Sample %2d] G_loss: %.8f, D_loss: %.8f' % (index, gene_loss_value,
+                                                         disc_loss_value))
+      index += 1
+      if index >= FLAGS.epoch:
+        break
+    return
 
-        counter += 1
-    except tf.errors.OutOfRangeError:
-      print 'Done training for %d epochs, %d steps.' % (FLAGS.epoch, counter)
-    finally:
-      coord.request_stop()
+  for epoch in xrange(FLAGS.start_epoch, FLAGS.start_epoch + FLAGS.epoch):
+    index = 0
+    file_object = open(DATA_PATH, 'rb')
+    print 'Current Epoch is: ' + str(epoch)
 
-  coord.join(threads)
-  sess.close()
+    for data_batch in read_in_chunks(file_object, FLAGS.batch_size):
+      if data_batch.shape[0] != FLAGS.batch_size:
+        break
+      noise_batch = np.random.uniform(-1, 1, [FLAGS.batch_size,
+                                              NOISE_DIM]).astype(np.float32)
+
+      if epoch % FLAGS.sample == 0 and index == 0:
+        # print data_batch[:10]
+        summary, samples, gene_loss_value, disc_loss_value = sess.run(
+            [merged, sampler, gene_loss, disc_loss],
+            feed_dict={
+                real_data_holder: data_batch,
+                input_noise_holder: noise_batch
+            })
+        writer.add_summary(summary, epoch)
+
+        # print samples[0]
+
+        print('[Getting Sample...] G_loss: %2.8f, D_loss: %2.8f' %
+              (gene_loss_value, disc_loss_value))
+
+      if epoch % FLAGS.ckpt == 0 and index == 0:
+        save(sess, saver, CHECKPOINT_DIR, counter)
+
+      for _ in xrange(FLAGS.disc_iter):
+        _, gene_loss_value, disc_loss_value = sess.run(
+            [disc_train_op, gene_loss, disc_loss],
+            feed_dict={
+                real_data_holder: data_batch,
+                input_noise_holder: noise_batch
+            })
+
+      for _ in xrange(FLAGS.gene_iter):
+        _, gene_loss_value, disc_loss_value = sess.run(
+            [gene_train_op, gene_loss, disc_loss],
+            feed_dict={
+                real_data_holder: data_batch,
+                input_noise_holder: noise_batch
+            })
+      if index % 10 == 0:
+        print(
+            'Epoch: %3d batch: %4d time: %4.2f, G_loss: %2.8f, D_loss: %2.8f' %
+            (epoch, index, time.time() - start_time, gene_loss_value,
+             disc_loss_value))
+      index += 1
+      counter += 1
 
 
 def discriminator(data, reuse=False):
@@ -302,7 +324,6 @@ def generator(noise, is_train=True):
     layer_num += 1
     with tf.variable_scope('hidden' + str(layer_num)):
       hidden = tf.maximum(0.0024, hidden)
-      #hidden = tf.reshape(hidden, [-1, 12])
 
     return hidden[:, H_CROP_S:H_CROP_E, W_CROP_S:W_CROP_E]
 
@@ -332,32 +353,14 @@ def load(sess, saver, checkpoint_dir):
     return False, 0
 
 
-def read_data(filename, epochs, batch_size):
-  filename_queue = tf.train.string_input_producer([filename], num_epochs=epochs)
-
-  reader = tf.TFRecordReader()
-  _, serialized_example = reader.read(filename_queue)
-  features = tf.parse_single_example(
-      serialized_example,
-      features={
-          'data_raw': tf.FixedLenFeature([], tf.string),
-          'label': tf.FixedLenFeature([], tf.int64),
-          'repetition': tf.FixedLenFeature([], tf.int64),
-          'subject': tf.FixedLenFeature([], tf.int64)
-      })
-  data = tf.decode_raw(features['data_raw'], tf.float64)
-  data.set_shape([DATA_FRAME * DATA_DIM])
-  data = tf.reshape(tf.cast(data, tf.float32), [DATA_FRAME, DATA_DIM, 1])
-  label = features['label']
-
-  datas, sparse_labels = tf.train.shuffle_batch(
-      [data, label],
-      batch_size,
-      num_threads=2,
-      capacity=1000 + 3 * batch_size,
-      min_after_dequeue=1000)
-
-  return datas, sparse_labels
+def read_in_chunks(file_object, chunk_size):
+  while True:
+    size = DATA_DIM * DATA_FRAME
+    batch = np.fromfile(file_object, dtype=np.float64, count=size * chunk_size)
+    if batch is None:
+      break
+    data = np.reshape(batch, (-1, DATA_FRAME, DATA_DIM, 1))
+    yield data
 
 
 def combine_images(images):
@@ -406,12 +409,9 @@ def main(_):
   print 'old_lr is:        ' + str(FLAGS.old_lr)
   print 'batch_size is:    ' + str(FLAGS.batch_size)
   print 'ckpt is:          ' + str(FLAGS.ckpt)
-  print 'log is:           ' + str(FLAGS.log)
+  print 'sample is:        ' + str(FLAGS.sample)
   print 'gpu is:           ' + str(FLAGS.gpu)
 
-  if not os.path.exists(DATA_PATH):
-    print 'DATA_PATH not exists!'
-    return
   if not os.path.exists(CHECKPOINT_DIR):
     os.makedirs(CHECKPOINT_DIR)
   if not os.path.exists(LOG_DIR):
