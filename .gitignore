@@ -2,3 +2,4 @@ checkpoint
 data
 samples
 log
+*.pyc
