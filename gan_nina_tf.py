@@ -354,7 +354,7 @@ def read_data(filename, epochs, batch_size):
   datas, sparse_labels = tf.train.shuffle_batch(
       [data, label],
       batch_size,
-      num_threads=2,
+      num_threads=10,
       capacity=1000 + 3 * batch_size,
       min_after_dequeue=1000)
 

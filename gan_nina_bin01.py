@@ -37,19 +37,19 @@ FLAG.DEFINE_integer('disc_iter', 1,
                     'Train discriminator how many times every batch.')
 FLAG.DEFINE_integer('gpu', 1, 'GPU No.')
 
-DATA_PATH = 'data/single/' + FLAGS.dataname + '.bin'
-CHECKPOINT_DIR = 'checkpoint/dev0s_' + FLAGS.dataname
+DATA_PATH = 'data/multi/' + FLAGS.dataname + '.bin'
+CHECKPOINT_DIR = 'checkpoint/dev1_' + FLAGS.dataname
 OLD_CHECKPOINT_DIR = 'checkpoint/mnist'
-LOG_DIR = 'log/dev0s_' + FLAGS.dataname
-SAMPLE_DIR = 'samples/dev0s_' + FLAGS.dataname
+LOG_DIR = 'log/dev1_' + FLAGS.dataname
+SAMPLE_DIR = 'samples/dev1_' + FLAGS.dataname
 
 BETA1 = 0.5
 BETA2 = 0.9
 LAMB_GP = 10
 
 DATA_DIM = 10
-DATA_FRAME = 1
-NOISE_DIM = 3
+DATA_FRAME = 20
+NOISE_DIM = 64
 
 HIDDEN_FRAME = int(math.ceil(DATA_FRAME / 4))
 HIDDEN_DIM = int(math.ceil(DATA_DIM / 4))
@@ -195,6 +195,7 @@ def train(sess):
 
       data = np.squeeze(samples)
       data = np.reshape(data, (FLAGS.batch_size * DATA_FRAME, DATA_DIM))
+      data = np.array(data, dtype=np.float64)
       label = int(FLAGS.dataname)
       repetition = index
       shape = np.array(data.shape)

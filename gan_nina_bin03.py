@@ -37,11 +37,11 @@ FLAG.DEFINE_integer('disc_iter', 1,
                     'Train discriminator how many times every batch.')
 FLAG.DEFINE_integer('gpu', 3, 'GPU No.')
 
-DATA_PATH = 'data/single/' + FLAGS.dataname + '.bin'
-CHECKPOINT_DIR = 'checkpoint/dev3s_' + FLAGS.dataname
+DATA_PATH = 'data/multi/' + FLAGS.dataname + '.bin'
+CHECKPOINT_DIR = 'checkpoint/dev3_' + FLAGS.dataname
 OLD_CHECKPOINT_DIR = 'checkpoint/mnist'
-LOG_DIR = 'log/dev3s_' + FLAGS.dataname
-SAMPLE_DIR = 'samples/dev3s_' + FLAGS.dataname
+LOG_DIR = 'log/dev3_' + FLAGS.dataname
+SAMPLE_DIR = 'samples/dev3_' + FLAGS.dataname
 
 BETA1 = 0.5
 BETA2 = 0.9
