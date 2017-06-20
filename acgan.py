@@ -59,7 +59,6 @@ NOISE_DIM = 3
 
 HIDDEN_FRAME = int(math.ceil(DATA_FRAME / 4))
 HIDDEN_DIM = int(math.ceil(DATA_DIM / 4))
-
 HIDDEN_SHAPE = np.array([[HIDDEN_FRAME, HIDDEN_FRAME * 2, HIDDEN_FRAME * 4],
                          [HIDDEN_DIM, HIDDEN_DIM * 2, HIDDEN_DIM * 4]])
 CROP = np.array([[int((HIDDEN_SHAPE[0][2] - DATA_FRAME) / 2),
